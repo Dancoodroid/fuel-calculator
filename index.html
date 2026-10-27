@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A0B0D">
+<meta name="description" content="Race fuel calculator for Assetto Corsa Competizione GT3.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fuel Calc">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+</style>
+<title>Fuel Calc</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: one narrow app column. Car and track picture cards open a searchable sheet; lap time and fuel per lap; three race lengths; one result card with fuel and laps. */
+:root {
+  --bg: #0A0B0D;
+  --card: #15171A;
+  --card-2: #1E2125;
+  --line: #2A2E34;
+  --fg: #F2F4F6;
+  --muted: #8E96A0;
+  --accent: #FF3355;
+  --accent-ink: #FFFFFF;
+  --warn: #FFB224;
+  --gt3: #1FA463;
+  --star: #FFC83D;
+  --scrim: rgba(0, 0, 0, 0.62);
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #EFF0F2; --card: #FFFFFF; --card-2: #F2F3F5; --line: #DADDE2;
+    --fg: #101316; --muted: #5F6873; --accent: #E5173D; --warn: #B87400; --star: #D9930A;
+    --scrim: rgba(16, 19, 22, 0.45); color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #EFF0F2; --card: #FFFFFF; --card-2: #F2F3F5; --line: #DADDE2;
+  --fg: #101316; --muted: #5F6873; --accent: #E5173D; --warn: #B87400; --star: #D9930A;
+  --scrim: rgba(16, 19, 22, 0.45); color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.4;
+  padding-block: 18px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+body.lock { overflow: hidden; }
+.app { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+button { font-family: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, .mphoto:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+h1 { margin: 0; padding: 4px 4px 2px; white-space: nowrap; font-family: var(--font-display); font-weight: 800; font-size: 24px; letter-spacing: 0.05em; text-transform: uppercase; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.lbl { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.hint { font-size: 13px; color: var(--muted); min-height: 18px; }
+.hint.bad { color: var(--warn); }
+.hint.ex { color: var(--accent); }
+
+/* Picture cards */
+.pick { position: relative; overflow: hidden; min-height: 150px; padding: 18px; text-align: left; cursor: pointer; background: var(--card); border: 1px solid var(--line); border-radius: 22px; display: flex; flex-direction: column; justify-content: flex-end; width: 100%; }
+.pick .art { position: absolute; inset: 0; color: var(--mk, var(--accent)); }
+.pick .art svg { position: absolute; right: 2%; top: 56%; width: 58%; max-width: 300px; transform: translateY(-50%); }
+.pick .art .ph { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pick .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, var(--card) 28%, transparent 78%); }
+.pick.hasph .art::after { background: linear-gradient(90deg, rgba(8,9,11,0.92) 0%, rgba(8,9,11,0.6) 50%, rgba(8,9,11,0.08) 100%); }
+.pick.hasph .pt { color: #fff; }
+.pick .art.trk::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,0.05) 0 14px, transparent 14px 28px); }
+.pick .art.trk .code { position: absolute; right: 14px; bottom: -22px; font-family: var(--font-display); font-weight: 800; font-size: 150px; line-height: 1; color: var(--fg); opacity: 0.1; }
+.pick .ptxt { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; max-width: 64%; }
+.pt { font-family: var(--font-display); font-weight: 800; font-size: 25px; line-height: 1.05; text-transform: uppercase; text-wrap: balance; }
+.change { position: absolute; z-index: 1; top: 16px; right: 16px; height: 30px; padding: 0 12px; border-radius: 15px; background: var(--card-2); border: 1px solid var(--line); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; display: inline-flex; align-items: center; color: var(--fg); }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 7px; font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: 0.05em; text-transform: uppercase; background: var(--card-2); color: var(--fg); border: 1px solid var(--line); }
+.pill.gt3 { background: var(--gt3); color: #fff; border-color: transparent; }
+.pill.mk { border-color: transparent; }
+svg .bd { fill: currentColor; }
+svg .glass { fill: var(--card); opacity: 0.88; }
+svg .wheel { fill: var(--card); stroke: currentColor; stroke-width: 5; }
+svg .hub { fill: currentColor; }
+
+/* Inputs */
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.fld { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.bigin { width: 100%; min-width: 0; height: 64px; background: var(--card-2); border: 1px solid var(--line); border-radius: 16px; padding: 0 10px; font-family: var(--font-display); font-weight: 800; font-size: 29px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.bigin::placeholder { color: var(--muted); opacity: 0.5; }
+
+/* Race length */
+.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.chip { height: 56px; border-radius: 14px; cursor: pointer; background: var(--card-2); border: 1px solid var(--line); font-family: var(--font-display); font-weight: 700; font-size: 24px; font-variant-numeric: tabular-nums; }
+.chip small { font-size: 14px; font-weight: 600; color: var(--muted); margin-left: 4px; letter-spacing: 0.06em; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip[aria-pressed="true"] small { color: inherit; opacity: 0.85; }
+
+/* Result */
+.row { display: flex; flex-direction: column; gap: 6px; }
+.row + .row { border-top: 1px solid var(--line); padding-top: 14px; }
+.readout { display: flex; align-items: baseline; gap: 8px; }
+.big { font-family: var(--font-display); font-weight: 800; font-size: clamp(96px, 30vw, 132px); line-height: 0.85; color: var(--accent); font-variant-numeric: tabular-nums; }
+.laps { font-family: var(--font-display); font-weight: 800; font-size: 64px; line-height: 0.95; font-variant-numeric: tabular-nums; }
+.unit { font-family: var(--font-display); font-weight: 700; font-size: 36px; color: var(--muted); }
+.empty { color: var(--muted); padding: 6px 0 2px; }
+
+/* Picker sheet */
+.sheet { position: fixed; inset: 0; z-index: 50; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; }
+.sheet[hidden] { display: none; }
+.sheet-in { width: 100%; max-width: 560px; height: 86%; background: var(--bg); border: 1px solid var(--line); border-bottom: 0; border-radius: 26px 26px 0 0; padding: 18px max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.shead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.shead h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: 0.06em; text-transform: uppercase; }
+.close { width: 40px; height: 40px; border-radius: 20px; background: var(--card-2); border: 1px solid var(--line); font-size: 20px; cursor: pointer; line-height: 1; }
+#q { width: 100%; height: 46px; padding: 0 16px; border-radius: 14px; background: var(--card); color: var(--fg); border: 1px solid var(--line); font-family: var(--font-body); font-size: 16px; }
+.filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; flex: none; }
+.filters::-webkit-scrollbar { display: none; }
+.filters .chip { flex: none; height: 36px; font-size: 15px; padding: 0 14px; border-radius: 12px; }
+.grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; gap: 10px; align-content: start; padding-bottom: max(20px, env(safe-area-inset-bottom, 0px)); }
+.mini { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; min-width: 0; }
+.mini[data-sel="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.msel { display: flex; flex-direction: column; width: 100%; padding: 0; text-align: left; cursor: pointer; background: none; border: 0; }
+.mart { flex: none; position: relative; height: 84px; overflow: hidden; color: var(--mk, var(--accent)); display: grid; place-items: center; background: var(--card-2); }
+.mart svg { width: 76%; }
+.mart img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mart.trk { background: repeating-linear-gradient(115deg, rgba(255,255,255,0.05) 0 12px, transparent 12px 24px), var(--card-2); }
+.mart.trk b { font-family: var(--font-display); font-weight: 800; font-size: 40px; letter-spacing: 0.04em; color: var(--fg); opacity: 0.85; }
+.mtxt { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mname { font-family: var(--font-display); font-weight: 700; font-size: 16px; line-height: 1.15; text-transform: uppercase; }
+.msub { font-size: 12px; color: var(--muted); }
+.star, .mphoto { position: absolute; top: 8px; width: 34px; height: 34px; border-radius: 17px; background: rgba(10, 11, 13, 0.7); border: 1px solid rgba(255, 255, 255, 0.18); color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.star { left: 8px; font-size: 18px; line-height: 1; }
+.star[aria-pressed="true"] { color: var(--star); }
+.mphoto { right: 8px; }
+.mphoto svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.mphoto input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
+.card[hidden] { display: none; }
+.editrow { display: flex; justify-content: flex-end; }
+.editrow[hidden] { display: none; }
+.editbtn { height: 34px; padding: 0 14px; border-radius: 17px; background: transparent; border: 1px solid var(--line); color: var(--muted); font-family: var(--font-body); font-weight: 500; font-size: 13px; cursor: pointer; }
+.bigin { cursor: pointer; caret-color: transparent; }
+.bigin.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+body.kpopen { padding-bottom: calc(330px + env(safe-area-inset-bottom, 0px)); }
+.kp { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--card); border-top: 1px solid var(--line); border-radius: 22px 22px 0 0; padding: 12px max(16px, env(safe-area-inset-right, 0px)) max(14px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 10px; user-select: none; -webkit-user-select: none; }
+.kp[hidden] { display: none; }
+.kpin { width: 100%; max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.kpbar { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-family: var(--font-display); font-weight: 700; letter-spacing: 0.04em; }
+.kpbar .kpf { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; }
+.kpbar #kpRes { font-size: 20px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.kpgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.key { height: 54px; border-radius: 14px; border: 1px solid var(--line); background: var(--card-2); font-family: var(--font-display); font-weight: 700; font-size: 28px; cursor: pointer; touch-action: manipulation; font-variant-numeric: tabular-nums; }
+.key:active { background: var(--line); }
+.key:disabled { opacity: 0.3; cursor: default; }
+.key.span2 { grid-column: span 2; }
+.key.done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-size: 22px; letter-spacing: 0.06em; text-transform: uppercase; }
+.none { grid-column: 1 / -1; color: var(--muted); padding: 24px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Fuel Calculator</h1>
+
+  <button class="pick" id="pickCar" type="button" aria-haspopup="dialog" aria-label="Change car">
+    <div class="art" id="carArt"></div>
+    <div class="ptxt"><div class="pt" id="carName"></div></div>
+  </button>
+
+  <button class="pick" id="pickTrack" type="button" aria-haspopup="dialog" aria-label="Change track">
+    <div class="art trk" id="trackArt"></div>
+    <div class="ptxt"><div class="pills" id="trackPills"></div><div class="pt" id="trackName"></div></div>
+  </button>
+
+  <div class="editrow" id="summaryCard" hidden><button class="editbtn" id="editBtn" type="button">Edit lap time &amp; fuel</button></div>
+
+  <section class="card" id="inputsCard" aria-label="Lap time and fuel per lap">
+    <div class="two">
+      <div class="fld"><label class="lbl" for="lap">Lap time</label><input class="bigin" id="lap" type="text" inputmode="none" readonly autocomplete="off" placeholder="1:47.800"></div>
+      <div class="fld"><label class="lbl" for="fpl">Fuel per lap (L)</label><input class="bigin" id="fpl" type="text" inputmode="none" readonly autocomplete="off" placeholder="3.00"></div>
+    </div>
+    <div class="hint" id="hint"></div>
+  </section>
+
+  <section class="card" aria-labelledby="lblLen">
+    <span class="lbl" id="lblLen">Race length</span>
+    <div class="seg" id="chips" role="group" aria-labelledby="lblLen"></div>
+  </section>
+
+  <section class="card" aria-label="Result" aria-live="polite">
+    <div id="resBody"></div>
+  </section>
+</div>
+
+<div class="kp" id="kp" hidden role="group" aria-label="Number pad">
+  <div class="kpin">
+    <div class="kpbar"><span id="kpRes">-</span><span class="kpf" id="kpField"></span></div>
+    <div class="kpgrid" id="kpGrid"></div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="sheet-in">
+    <div class="shead"><h2 id="sheetTitle">Choose</h2><button class="close" id="sheetClose" type="button" aria-label="Close">&times;</button></div>
+    <input id="q" type="search" placeholder="Search" autocomplete="off" aria-label="Search">
+    <div class="filters" id="filters" role="group" aria-label="Filter"></div>
+    <div class="hint bad" id="photoMsg" role="status" hidden></div>
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var CARS = [
+    ["Aston Martin V8 Vantage AMR GT3 Evo", "Aston Martin"], ["Audi R8 LMS GT3 Evo II", "Audi"],
+    ["Bentley Continental GT3", "Bentley"], ["BMW M4 GT3", "BMW"], ["BMW M6 GT3", "BMW"],
+    ["Ferrari 296 GT3", "Ferrari"], ["Ferrari 488 GT3 Evo", "Ferrari"], ["Ford Mustang GT3", "Ford"],
+    ["Honda NSX GT3 Evo", "Honda"], ["Lamborghini Huracán GT3 Evo 2", "Lamborghini"], ["Lexus RC F GT3", "Lexus"],
+    ["McLaren 720S GT3 Evo", "McLaren"], ["Mercedes-AMG GT3 Evo", "Mercedes-AMG"], ["Nissan GT-R Nismo GT3", "Nissan"],
+    ["Porsche 911 GT3 R (992)", "Porsche"], ["Porsche 911 GT3 R (991.2)", "Porsche"]
+  ];
+  var MAKE = {
+    "Aston Martin": ["#1E8C6E", "#FFFFFF"], "Audi": ["#D62E2A", "#FFFFFF"], "Bentley": ["#2F7D52", "#FFFFFF"],
+    "BMW": ["#2F7DE1", "#FFFFFF"], "Ferrari": ["#E1301F", "#FFFFFF"], "Ford": ["#2B5EAF", "#FFFFFF"],
+    "Honda": ["#E43C3C", "#FFFFFF"], "Lamborghini": ["#F2B90F", "#1A1400"], "Lexus": ["#A3AEBB", "#10151A"],
+    "McLaren": ["#FF7A1A", "#1A0D00"], "Mercedes-AMG": ["#19B5A0", "#04201C"], "Nissan": ["#C9A227", "#1A1400"],
+    "Porsche": ["#D9D4C7", "#16140F"]
+  };
+  var TRACKS = [
+    ["Barcelona-Catalunya", "ES", 4.655], ["Brands Hatch", "GB", 3.908], ["Circuit of the Americas", "US", 5.513],
+    ["Donington Park", "GB", 4.020], ["Hungaroring", "HU", 4.381], ["Imola", "IT", 4.909],
+    ["Indianapolis", "US", 4.192], ["Kyalami", "ZA", 4.529], ["Laguna Seca", "US", 3.602],
+    ["Misano", "IT", 4.226], ["Monza", "IT", 5.793], ["Mount Panorama", "AU", 6.213],
+    ["Nürburgring GP", "DE", 5.148], ["Nürburgring Nordschleife", "DE", 25.378], ["Oulton Park", "GB", 4.307],
+    ["Paul Ricard", "FR", 5.842], ["Red Bull Ring", "AT", 4.318], ["Silverstone", "GB", 5.891],
+    ["Snetterton", "GB", 4.779], ["Spa-Francorchamps", "BE", 7.004], ["Suzuka", "JP", 5.807],
+    ["Valencia", "ES", 4.005], ["Watkins Glen", "US", 5.430], ["Zandvoort", "NL", 4.259], ["Zolder", "BE", 4.011]
+  ];
+  var CNAME = { ES: "Spain", GB: "UK", US: "USA", HU: "Hungary", IT: "Italy", ZA: "South Africa", AU: "Australia", DE: "Germany", FR: "France", AT: "Austria", BE: "Belgium", JP: "Japan", NL: "Netherlands" };
+  var PRESETS = [20, 25, 30];
+  var KEY = "accfuel.v1", PKEY = "accfuel.photos.v1";
+  var CAR_SVG = '<svg viewBox="0 0 260 90" aria-hidden="true">' +
+    '<rect class="bd" x="4" y="30" width="38" height="5" rx="2"/><rect class="bd" x="18" y="34" width="4" height="12"/>' +
+    '<path class="bd" d="M8 68 L12 54 Q14 48 30 46 L74 42 Q92 24 128 22 L172 24 Q196 32 208 44 L240 48 Q254 52 254 68 Z"/>' +
+    '<path class="glass" d="M92 42 Q104 30 128 29 L166 31 Q184 36 192 43 Z"/>' +
+    '<circle class="wheel" cx="62" cy="68" r="17"/><circle class="hub" cx="62" cy="68" r="5"/>' +
+    '<circle class="wheel" cx="204" cy="68" r="17"/><circle class="hub" cx="204" cy="68" r="5"/></svg>';
+  var CAM_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+
+  function $(id) { return document.getElementById(id); }
+  function readJson(k) { try { return JSON.parse(localStorage.getItem(k)) || null; } catch (e) { return null; } }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {} }
+  function persistPhotos() { try { localStorage.setItem(PKEY, JSON.stringify(photos)); return true; } catch (e) { return false; } }
+
+  var store = readJson(KEY) || {};
+  store.combos = store.combos || {};
+  store.prefs = store.prefs || {};
+  store.favs = store.favs || {};
+  var photos = readJson(PKEY) || {};
+  var fresh = !Object.keys(store.combos).length && store.prefs.car == null;
+
+  var S = {
+    car: store.prefs.car != null ? store.prefs.car : 5,
+    track: store.prefs.track != null ? store.prefs.track : 10,
+    mins: PRESETS.indexOf(store.prefs.mins) >= 0 ? store.prefs.mins : 20,
+    lap: "", fplStr: "", example: false
+  };
+  if (S.car >= CARS.length) S.car = 0;
+  if (S.track >= TRACKS.length) S.track = 0;
+
+  var inputsOpen = false;
+  function ck() { return S.car + "|" + S.track; }
+  function hasSaved() { var c = store.combos[ck()]; return !!(c && c.lap && c.fpl); }
+  function renderInputs() {
+    var open = inputsOpen || S.example || !hasSaved();
+    $("inputsCard").hidden = !open;
+    $("summaryCard").hidden = open;
+  }
+  function parseFpl(s) { var v = parseFloat(String(s).replace(",", ".")); return v > 0 && v < 50 ? v : NaN; }
+  function pullCombo() {
+    var c = store.combos[ck()];
+    S.lap = c && c.lap ? fmtLap(c.lap) : "";
+    S.fplStr = c && c.fpl ? String(c.fpl) : "";
+    S.example = false;
+    inputsOpen = false;
+  }
+  function pushCombo() {
+    var T = parseLap(S.lap), F = parseFpl(S.fplStr);
+    var lap = !isNaN(T) && T >= 20 ? T : null, fpl = !isNaN(F) ? F : null;
+    if (lap === null && fpl === null) delete store.combos[ck()];
+    else store.combos[ck()] = { lap: lap, fpl: fpl };
+    persist();
+  }
+  function savePrefs() { store.prefs = { car: S.car, track: S.track, mins: S.mins }; persist(); }
+
+  function parseLap(str) {
+    str = String(str).trim().replace(",", ".");
+    var m = str.match(/^(\d+):([0-5]?\d(?:\.\d{1,3})?)$/);
+    return m ? parseInt(m[1], 10) * 60 + parseFloat(m[2]) : NaN;
+  }
+  function fmtLap(sec) {
+    var m = Math.floor(sec / 60), s = (sec - m * 60).toFixed(3);
+    if (parseFloat(s) >= 60) { m += 1; s = "00.000"; }
+    return m + ":" + (parseFloat(s) < 10 ? "0" : "") + s;
+  }
+
+  /* Whole laps that fit in the race time, plus the lap still to finish after the timer hits zero. */
+  function calc() {
+    var T = parseLap(S.lap), F = parseFpl(S.fplStr);
+    if (isNaN(T) || T < 20 || isNaN(F)) return null;
+    var total = Math.floor(S.mins * 60 / T) + 1;
+    return { laps: total, fuel: total * F };
+  }
+
+  function carColor(i) { return (MAKE[CARS[i][1]] || ["#888", "#fff"])[0]; }
+  function pkey(m, i) { return (m === "car" ? "c:" + CARS[i][0] : "t:" + TRACKS[i][0]); }
+
+  function renderCards() {
+    var c = CARS[S.car], t = TRACKS[S.track], mk = MAKE[c[1]] || ["#888", "#fff"];
+    var cp = photos[pkey("car", S.car)], tp = photos[pkey("track", S.track)];
+    $("pickCar").classList.toggle("hasph", !!cp);
+    $("carArt").style.setProperty("--mk", mk[0]);
+    $("carArt").innerHTML = cp ? '<img class="ph" alt="" src="' + cp + '">' : CAR_SVG;
+    $("carName").textContent = c[0];
+    $("pickTrack").classList.toggle("hasph", !!tp);
+    $("trackArt").innerHTML = tp ? '<img class="ph" alt="" src="' + tp + '">' : '<span class="code">' + t[1] + '</span>';
+    $("trackPills").innerHTML = '<span class="pill">' + CNAME[t[1]] + '</span><span class="pill">' + t[2].toFixed(3) + ' km</span>';
+    $("trackName").textContent = t[0];
+  }
+
+  function renderChips() {
+    var box = $("chips"); box.innerHTML = "";
+    PRESETS.forEach(function (p) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.dataset.m = p;
+      b.innerHTML = p + '<small>MIN</small>';
+      b.addEventListener("click", function () { S.mins = p; savePrefs(); sync(); });
+      box.appendChild(b);
+    });
+  }
+
+  function renderResult() {
+    var r = calc(), box = $("resBody");
+    if (!r) {
+      box.innerHTML = '<div class="empty">Enter your lap time and fuel per lap to see how much fuel to load.</div>';
+      $("kpRes").textContent = "-";
+      return;
+    }
+    $("kpRes").textContent = Math.ceil(r.fuel) + " L  ·  " + r.laps + " laps";
+    box.innerHTML =
+      '<div class="row"><span class="lbl">Fuel to load</span><div class="readout"><span class="big">' + Math.ceil(r.fuel) + '</span><span class="unit">L</span></div></div>' +
+      '<div class="row"><span class="lbl">Laps (including +1)</span><div class="laps">' + r.laps + '</div></div>';
+  }
+
+  function sync(full) {
+    if (full) { $("lap").value = S.lap; $("fpl").value = S.fplStr; renderCards(); }
+    Array.prototype.forEach.call($("chips").children, function (b) { b.setAttribute("aria-pressed", String(+b.dataset.m === S.mins)); });
+    var h = $("hint"), T = parseLap(S.lap), F = parseFpl(S.fplStr);
+    var badLap = S.lap.trim() && (isNaN(T) || T < 20), badFpl = S.fplStr.trim() && isNaN(F);
+    if (S.example) { h.textContent = "Example numbers. Type your own lap time and fuel per lap."; h.className = "hint ex"; }
+    else if (badLap) { h.textContent = "Lap time format: 1:47.800"; h.className = "hint bad"; }
+    else if (badFpl) { h.textContent = "Fuel per lap: use a number like 3.05."; h.className = "hint bad"; }
+    else { h.textContent = "Both saved for this car and track."; h.className = "hint"; }
+    renderResult();
+    renderInputs();
+  }
+
+  /* Picker sheet */
+  var mode = "car", filter = "All", opener = null, kpClose = function () {};
+  function groupOf(i) { return mode === "car" ? CARS[i][1] : CNAME[TRACKS[i][1]]; }
+  function msg(t) { var m = $("photoMsg"); m.textContent = t || ""; m.hidden = !t; }
+  function openSheet(m, btn) {
+    kpClose(); mode = m; filter = "All"; opener = btn; msg("");
+    $("sheetTitle").textContent = m === "car" ? "Choose car" : "Choose track";
+    $("q").value = ""; $("q").placeholder = m === "car" ? "Search cars" : "Search tracks";
+    var list = m === "car" ? CARS : TRACKS, seen = {}, groups = ["All"];
+    list.forEach(function (_, i) { var g = groupOf(i); if (!seen[g]) { seen[g] = 1; groups.push(g); } });
+    var f = $("filters"); f.innerHTML = "";
+    groups.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = g; b.dataset.g = g;
+      b.setAttribute("aria-pressed", String(g === "All"));
+      b.addEventListener("click", function () {
+        filter = g;
+        Array.prototype.forEach.call(f.children, function (x) { x.setAttribute("aria-pressed", String(x.dataset.g === g)); });
+        renderGrid();
+      });
+      f.appendChild(b);
+    });
+    $("sheet").hidden = false; document.body.classList.add("lock");
+    renderGrid(); $("sheetClose").focus();
+  }
+  function closeSheet() { $("sheet").hidden = true; document.body.classList.remove("lock"); if (opener) opener.focus(); }
+
+  function favKey(it) { return mode === "car" ? it[0] : "t:" + it[0]; }
+  function renderGrid() {
+    var list = mode === "car" ? CARS : TRACKS, q = $("q").value.trim().toLowerCase(), order = [], rest = [];
+    list.forEach(function (it, i) {
+      var g = groupOf(i);
+      if (filter !== "All" && g !== filter) return;
+      if (q && (it[0] + " " + g).toLowerCase().indexOf(q) < 0) return;
+      if (store.favs[favKey(it)]) order.push(i); else rest.push(i);
+    });
+    order = order.concat(rest);
+    var html = "";
+    order.forEach(function (i) {
+      var it = list[i], sel = (mode === "car" ? S.car : S.track) === i, ph = photos[pkey(mode, i)], art, sub;
+      var fav = !!store.favs[favKey(it)];
+      var star = '<button type="button" class="star" data-i="' + i + '" aria-pressed="' + fav + '" aria-label="Favourite ' + it[0] + '">' + (fav ? "★" : "☆") + '</button>';
+      if (mode === "car") {
+        art = '<div class="mart" style="--mk:' + carColor(i) + '">' + (ph ? '<img alt="" src="' + ph + '">' : CAR_SVG) + '</div>'; sub = it[1];
+      } else {
+        art = '<div class="mart trk">' + (ph ? '<img alt="" src="' + ph + '">' : '<b>' + it[1] + '</b>') + '</div>'; sub = it[2].toFixed(3) + ' km · ' + CNAME[it[1]];
+      }
+      html += '<div class="mini" data-sel="' + sel + '">' +
+        '<button type="button" class="msel" data-i="' + i + '" aria-pressed="' + sel + '">' + art +
+        '<div class="mtxt"><div class="mname">' + it[0] + '</div><div class="msub">' + sub + '</div></div></button>' + star +
+        '<label class="mphoto" aria-label="' + (ph ? "Change" : "Add") + ' photo for ' + it[0] + '">' + CAM_SVG +
+        '<input type="file" accept="image/*" data-i="' + i + '"></label></div>';
+    });
+    $("grid").innerHTML = order.length ? html : '<div class="none">Nothing matches that search.</div>';
+  }
+
+  function handleFile(file, m, i) {
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var sc = Math.min(1, 640 / img.width), c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(img.width * sc)); c.height = Math.max(1, Math.round(img.height * sc));
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      photos[pkey(m, i)] = c.toDataURL("image/jpeg", 0.82);
+      msg(persistPhotos() ? "" : "Photo shown for now but could not be saved. It will be gone when you close the page.");
+      renderCards(); renderGrid();
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); msg("That file is not a picture."); };
+    img.src = url;
+  }
+
+  function bind() {
+    $("pickCar").addEventListener("click", function () { openSheet("car", this); });
+    $("pickTrack").addEventListener("click", function () { openSheet("track", this); });
+    $("sheetClose").addEventListener("click", closeSheet);
+    $("sheet").addEventListener("click", function (e) { if (e.target === this) closeSheet(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+    $("q").addEventListener("input", renderGrid);
+    $("grid").addEventListener("click", function (e) {
+      var st = e.target.closest(".star");
+      if (st) {
+        var fk = favKey((mode === "car" ? CARS : TRACKS)[+st.dataset.i]);
+        if (store.favs[fk]) delete store.favs[fk]; else store.favs[fk] = true;
+        persist(); renderGrid(); return;
+      }
+      var b = e.target.closest(".msel"); if (!b) return;
+      var i = +b.dataset.i;
+      if (mode === "car") S.car = i; else S.track = i;
+      pullCombo(); savePrefs(); closeSheet(); sync(true);
+    });
+    $("grid").addEventListener("change", function (e) {
+      var inp = e.target.closest("input[type=file]");
+      if (!inp || !inp.files || !inp.files[0]) return;
+      var file = inp.files[0], i = +inp.dataset.i;
+      handleFile(file, mode, i);
+    });
+
+    var active = null;
+    function setActive(f) {
+      active = f;
+      if (f) inputsOpen = true;
+      else if (inputsOpen && hasSaved()) inputsOpen = false;
+      $("lap").classList.toggle("active", f === "lap");
+      $("fpl").classList.toggle("active", f === "fpl");
+      $("kp").hidden = !f;
+      document.body.classList.toggle("kpopen", !!f);
+      $("kpField").textContent = f === "lap" ? "Lap time" : f === "fpl" ? "Fuel per lap" : "";
+      $("kpColon").disabled = f !== "lap";
+      if (f) setTimeout(function () { $(f).scrollIntoView({ block: "center", behavior: "smooth" }); }, 60);
+      renderInputs();
+    }
+    $("editBtn").addEventListener("click", function () { inputsOpen = true; renderInputs(); setActive("lap"); });
+    kpClose = function () { setActive(null); };
+
+    function press(k) {
+      if (!active) return;
+      var lap = active === "lap", s = lap ? S.lap : S.fplStr, n;
+      if (S.example) { S.example = false; S.lap = ""; S.fplStr = ""; s = ""; }
+      if (k === "bk") { s = s.slice(0, -1); if (!lap && s === "0") s = ""; }
+      else if (k === ":") {
+        if (!lap || !/^\d{1,2}$/.test(s)) return;
+        s += ":";
+      } else if (k === ".") {
+        if (lap) { if (!/^\d{1,2}:\d{1,2}$/.test(s)) return; }
+        else if (s.indexOf(".") >= 0) return;
+        s += (!lap && s === "") ? "0." : ".";
+      } else {
+        if (lap) {
+          n = s.split(/[:.]/);
+          if (s.indexOf(".") >= 0) { if (n[2].length >= 3) return; }
+          else if (s.indexOf(":") >= 0) { if (n[1].length >= 2) return; }
+          else if (n[0].length >= 2) return;
+        } else if (s.length >= 6 || (s.indexOf(".") >= 0 && s.split(".")[1].length >= 3)) return;
+        if (!lap && s === "0") s = "";
+        s += k;
+      }
+      if (lap) S.lap = s; else S.fplStr = s;
+      $("lap").value = S.lap; $("fpl").value = S.fplStr;
+      pushCombo(); sync();
+    }
+
+    var KEYS = [["1"], ["2"], ["3"], ["bk", "\u232B", "Delete"], ["4"], ["5"], ["6"], [":", ":", "Colon"], ["7"], ["8"], ["9"], [".", ".", "Dot"], ["0", "0", "Zero", 2], ["done", "Done", "Done", 2]];
+    var grid = $("kpGrid");
+    KEYS.forEach(function (d) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "key"; b.dataset.k = d[0]; b.textContent = d[1] || d[0];
+      if (d[2]) b.setAttribute("aria-label", d[2]);
+      if (d[3] === 2) b.classList.add("span2");
+      if (d[0] === "done") b.classList.add("done");
+      if (d[0] === ":") b.id = "kpColon";
+      grid.appendChild(b);
+    });
+    grid.addEventListener("click", function (e) {
+      var b = e.target.closest(".key"); if (!b) return;
+      if (b.dataset.k === "done") setActive(null); else press(b.dataset.k);
+    });
+    ["lap", "fpl"].forEach(function (id) {
+      var el = $(id);
+      el.addEventListener("focus", function () { if (active !== id) setActive(id); });
+      el.addEventListener("click", function () { if (active !== id) setActive(id); });
+      el.addEventListener("keydown", function (e) {
+        var k = null;
+        if (/^\d$/.test(e.key)) k = e.key;
+        else if (e.key === ":" || e.key === ";") k = ":";
+        else if (e.key === "." || e.key === ",") k = ".";
+        else if (e.key === "Backspace") k = "bk";
+        else if (e.key === "Enter" || e.key === "Escape") { setActive(null); el.blur(); return; }
+        if (k) { e.preventDefault(); press(k); }
+      });
+    });
+    document.addEventListener("pointerdown", function (e) {
+      if (active && !e.target.closest("#kp, .fld")) setActive(null);
+    });
+  }
+
+  renderChips();
+  pullCombo();
+  if (fresh) { S.lap = "1:47.800"; S.fplStr = "3.00"; S.example = true; }
+  bind();
+  sync(true);
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); });
+}
+</script>
+</body>
+</html>
